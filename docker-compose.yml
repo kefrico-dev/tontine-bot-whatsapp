@@ -1,0 +1,59 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Par défaut : MongoDB du compose. Si .env définit MONGODB_URI
+      # (MongoDB Atlas par exemple), cette valeur est utilisée à la place.
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/?replicaSet=rs0}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-kefrico_tontine}
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+
+  mongo:
+    image: mongo:7
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Initialise le replica set mono-nœud. Idempotent : relancer `docker compose up`
+  # ne réinitialise rien. Le replica set est requis par les transactions
+  # multi-documents dont dépendra le ledger financier.
+  mongo-init:
+    image: mongo:7
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - --quiet
+      - --eval
+      - |
+        try {
+          rs.status();
+          print("replica set deja initialise");
+        } catch (error) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
+          print("replica set initialise");
+        }
+        while (!db.hello().isWritablePrimary) { sleep(200); }
+        print("replica set primaire");
+
+volumes:
+  mongo_data:
