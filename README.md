@@ -25,6 +25,7 @@ Le principe est simple :
 - [Modèle métier](#modèle-métier)
 - [Règles d'ingénierie critiques](#règles-dingénierie-critiques)
 - [Démarrage](#démarrage)
+- [Webhook WhatsApp](#webhook-whatsapp)
 - [Configuration](#configuration)
 - [Feuille de route](#feuille-de-route)
 - [Philosophie produit](#philosophie-produit)
@@ -504,6 +505,67 @@ cette valeur à la place du MongoDB local.
 Les tests unitaires n'ont besoin d'aucune base. Les tests d'intégration
 (`uv run pytest -m integration`) s'exécutent si une base est joignable, et sont ignorés
 sinon.
+
+---
+
+## Webhook WhatsApp
+
+### Routes
+
+| Route | Rôle |
+| --- | --- |
+| `GET /webhooks/whatsapp` | Vérification Meta. Répond le `hub.challenge` en texte brut si `hub.mode=subscribe` et que le verify token correspond ; **403** sinon |
+| `POST /webhooks/whatsapp` | Réception des événements. Vérifie `X-Hub-Signature-256` sur le corps brut, normalise, déduplique, enregistre, répond |
+
+Codes de retour du POST, et ce que Meta en fait :
+
+| Situation | Code | Meta rejoue ? |
+| --- | --- | --- |
+| Événement traité, doublon, ou payload non pertinent | `200` | non |
+| Signature absente ou invalide | `403` | oui |
+| JSON malformé | `400` | oui, sans effet |
+| MongoDB indisponible ou index absents | `503` | oui — c'est voulu, rien n'est perdu |
+| Envoi de la réponse échoué | `200` | non — rejouer ne réparerait pas l'envoi et risquerait un doublon |
+
+### Test local
+
+```bash
+uv run uvicorn app.main:app --reload
+
+# Vérification (le challenge est renvoyé tel quel)
+curl "http://localhost:8000/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=$META_VERIFY_TOKEN&hub.challenge=1234"
+
+# Réception : la signature doit être calculée sur le corps exact
+BODY='{"object":"whatsapp_business_account","entry":[]}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$META_APP_SECRET" | awk '{print $2}')
+curl -X POST http://localhost:8000/webhooks/whatsapp   -H "X-Hub-Signature-256: sha256=$SIG"   -H "Content-Type: application/json"   -d "$BODY"
+```
+
+### Exposer le webhook à Meta
+
+Meta doit joindre le webhook depuis Internet. En développement, un tunnel suffit :
+
+```bash
+ngrok http 8000
+```
+
+L'URL publique change à chaque redémarrage d'ngrok : le webhook Meta doit être
+reconfiguré à chaque session.
+
+### Configuration côté Meta
+
+Dans `Cas d'utilisation → Connecter à WhatsApp → Configuration de base → Étape 1` :
+
+1. **Callback URL** : `https://<sous-domaine>.ngrok-free.app/webhooks/whatsapp`
+2. **Verify token** : la valeur de `META_VERIFY_TOKEN` de votre `.env`
+3. Cliquer sur **Vérifier et enregistrer** — Meta appelle le `GET` et attend le challenge
+4. S'abonner au champ **`messages`** (il couvre les messages entrants et les statuts de livraison)
+5. Ajouter son numéro dans la liste des destinataires autorisés du numéro de test
+
+Les numéros de téléphone ne sont jamais journalisés en entier, seuls les quatre
+derniers chiffres apparaissent. Les jetons, secrets et URI de base ne sont jamais
+journalisés du tout — le log d'accès d'uvicorn est désactivé pour cette raison,
+puisqu'il imprimerait le verify token présent dans la query string.
 
 ---
 

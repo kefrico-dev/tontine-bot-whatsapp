@@ -10,6 +10,14 @@ services:
       # (MongoDB Atlas par exemple), cette valeur est utilisée à la place.
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/?replicaSet=rs0}
       MONGODB_DATABASE: ${MONGODB_DATABASE:-kefrico_tontine}
+      # Meta / WhatsApp : reprises depuis .env, vides par défaut.
+      # Sans elles l'application démarre, mais les routes webhook répondent 503.
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v25.0}
     ports:
       - "8000:8000"
     depends_on:

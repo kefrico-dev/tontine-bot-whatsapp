@@ -12,8 +12,17 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pymongo.errors import ServerSelectionTimeoutError
 
+from app.api.webhooks.whatsapp import get_messaging_service
 from app.core.config import Settings
 from app.main import create_app
+from app.modules.messaging.service import MessagingService
+from tests.factories import (
+    APP_SECRET,
+    PHONE_NUMBER_ID,
+    VERIFY_TOKEN,
+    FakeMessagingRepository,
+    FakeWhatsAppClient,
+)
 
 
 class FakeAdmin:
@@ -38,7 +47,22 @@ class FakeMongoClient:
 
 @pytest.fixture
 def settings() -> Settings:
+    """Configuration sans WhatsApp : l'application doit démarrer malgré tout."""
     return Settings(environment="local", log_level="INFO", _env_file=None)
+
+
+@pytest.fixture
+def whatsapp_settings() -> Settings:
+    """Configuration WhatsApp complète, avec des valeurs de test."""
+    return Settings(
+        environment="local",
+        log_level="INFO",
+        meta_verify_token=VERIFY_TOKEN,
+        meta_app_secret=APP_SECRET,
+        whatsapp_access_token="EAA-jeton-de-test",
+        whatsapp_phone_number_id=PHONE_NUMBER_ID,
+        _env_file=None,
+    )
 
 
 @pytest.fixture
@@ -49,7 +73,40 @@ def app(settings: Settings) -> FastAPI:
 
 
 @pytest.fixture
+def repository() -> FakeMessagingRepository:
+    return FakeMessagingRepository()
+
+
+@pytest.fixture
+def whatsapp_client() -> FakeWhatsAppClient:
+    return FakeWhatsAppClient()
+
+
+@pytest.fixture
+def whatsapp_app(
+    whatsapp_settings: Settings,
+    repository: FakeMessagingRepository,
+    whatsapp_client: FakeWhatsAppClient,
+) -> FastAPI:
+    """Application configurée pour WhatsApp, branchée sur des doublures."""
+    application = create_app(whatsapp_settings)
+    application.state.mongo_client = FakeMongoClient(reachable=True)
+    application.state.indexes_ready = True
+
+    service = MessagingService(repository, whatsapp_client, business_phone=PHONE_NUMBER_ID)  # type: ignore[arg-type]
+    application.dependency_overrides[get_messaging_service] = lambda: service
+    return application
+
+
+@pytest.fixture
 async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:
+        yield async_client
+
+
+@pytest.fixture
+async def whatsapp_http(whatsapp_app: FastAPI) -> AsyncIterator[AsyncClient]:
+    transport = ASGITransport(app=whatsapp_app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:
         yield async_client
