@@ -196,3 +196,15 @@ class FakeWhatsAppClient:
             external_message_id=f"wamid.OUT{len(self.sent)}",
             recipient=to,
         )
+
+
+class StaticReplyComposer:
+    """Composeur de réponse figé : isole les tests du canal de sa logique métier."""
+
+    def __init__(self, reply: str = "Bienvenue sur KEFRICO Tontine") -> None:
+        self.reply = reply
+        self.seen: list[str] = []
+
+    async def reply_to(self, message: InboundWhatsAppMessage, *, correlation_id: str | None) -> str:
+        self.seen.append(message.text or "")
+        return self.reply

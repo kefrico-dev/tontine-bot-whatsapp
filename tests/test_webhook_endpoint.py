@@ -11,12 +11,13 @@ from app.modules.messaging.schemas import (
     WebhookEventStatus,
     WhatsAppMessageType,
 )
-from app.modules.messaging.service import WELCOME_MESSAGE, MessagingService
+from app.modules.messaging.service import MessagingService
 from tests.factories import (
     SENDER,
     WAMID,
     FakeMessagingRepository,
     FakeWhatsAppClient,
+    StaticReplyComposer,
     encode,
     signed_headers,
     status_payload,
@@ -30,6 +31,7 @@ async def test_complete_flow_stores_and_replies(
     whatsapp_http: AsyncClient,
     repository: FakeMessagingRepository,
     whatsapp_client: FakeWhatsAppClient,
+    reply_composer: StaticReplyComposer,
 ) -> None:
     body = encode(text_message_payload())
 
@@ -46,9 +48,8 @@ async def test_complete_flow_stores_and_replies(
     assert stored.text == "Bonjour"
     assert stored.message_type is WhatsAppMessageType.TEXT
 
-    # réponse envoyée
-    assert whatsapp_client.sent == [(SENDER, WELCOME_MESSAGE)]
-    assert WELCOME_MESSAGE.startswith("Bienvenue sur KEFRICO Tontine 👋")
+    # réponse envoyée : celle produite par le composeur, quel qu'il soit
+    assert whatsapp_client.sent == [(SENDER, reply_composer.reply)]
 
     # message sortant enregistré
     assert len(repository.outbound) == 1
@@ -102,7 +103,7 @@ async def test_outbound_failure_still_acknowledges_meta(
 ) -> None:
     """Rejouer le webhook ne réparerait pas l'envoi : on acquitte quand même."""
     failing = FakeWhatsAppClient(error=WhatsAppTransportError("ReadTimeout"))
-    service = MessagingService(repository, failing)  # type: ignore[arg-type]
+    service = MessagingService(repository, failing, StaticReplyComposer())  # type: ignore[arg-type]
     whatsapp_app.dependency_overrides[get_messaging_service] = lambda: service
 
     body = encode(text_message_payload())

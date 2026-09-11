@@ -13,12 +13,17 @@ from app.infrastructure.whatsapp.exceptions import (
 from app.infrastructure.whatsapp.parser import parse_webhook_payload
 from app.modules.messaging.repository import MessagingRepository
 from app.modules.messaging.schemas import ParsedEvent, WebhookEventStatus, WebhookEventType
-from app.modules.messaging.service import WELCOME_MESSAGE, MessagingService
-from tests.factories import (
+from app.modules.messaging.service import MessagingService
+
+#: La Phase 2 remplace la constante par un composeur : on fige le texte ici.
+WELCOME_MESSAGE = "Bienvenue sur KEFRICO Tontine"
+
+from tests.factories import (  # noqa: E402
     SENDER,
     WAMID,
     FakeMessagingRepository,
     FakeWhatsAppClient,
+    StaticReplyComposer,
     encode,
     status_payload,
     text_message_payload,
@@ -30,7 +35,12 @@ def events_of(payload: dict[str, Any]) -> list[ParsedEvent]:
 
 
 def build(repository: FakeMessagingRepository, client: FakeWhatsAppClient) -> MessagingService:
-    return MessagingService(repository, client, business_phone="100000000000001")  # type: ignore[arg-type]
+    return MessagingService(
+        repository,
+        client,  # type: ignore[arg-type]
+        StaticReplyComposer(WELCOME_MESSAGE),
+        business_phone="100000000000001",
+    )
 
 
 async def test_text_message_is_stored_and_answered() -> None:

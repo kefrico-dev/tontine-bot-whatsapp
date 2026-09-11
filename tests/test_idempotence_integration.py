@@ -20,7 +20,13 @@ from app.infrastructure.whatsapp.parser import parse_webhook_payload
 from app.modules.messaging.repository import MESSAGES, WEBHOOK_EVENTS, MessagingRepository
 from app.modules.messaging.schemas import WebhookEventStatus, WebhookEventType
 from app.modules.messaging.service import MessagingService
-from tests.factories import WAMID, FakeWhatsAppClient, encode, text_message_payload
+from tests.factories import (
+    WAMID,
+    FakeWhatsAppClient,
+    StaticReplyComposer,
+    encode,
+    text_message_payload,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -97,7 +103,7 @@ async def test_concurrent_deliveries_reply_once(
     events = parse_webhook_payload(payload, raw_body=encode(payload))
 
     async def deliver(correlation_id: str) -> Any:
-        service = MessagingService(MessagingRepository(database), client)  # type: ignore[arg-type]
+        service = MessagingService(MessagingRepository(database), client, StaticReplyComposer())  # type: ignore[arg-type]
         return await service.handle_events(events, correlation_id=correlation_id)
 
     first, second = await asyncio.gather(deliver("c1"), deliver("c2"))
@@ -117,7 +123,12 @@ async def test_full_cycle_writes_both_directions(
     client = FakeWhatsAppClient()
     payload = text_message_payload()
     events = parse_webhook_payload(payload, raw_body=encode(payload))
-    service = MessagingService(MessagingRepository(database), client, business_phone="15556762623")  # type: ignore[arg-type]
+    service = MessagingService(
+        MessagingRepository(database),
+        client,  # type: ignore[arg-type]
+        StaticReplyComposer(),
+        business_phone="15556762623",
+    )
 
     await service.handle_events(events, correlation_id="c1")
 

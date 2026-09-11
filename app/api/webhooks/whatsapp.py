@@ -26,8 +26,14 @@ from app.infrastructure.whatsapp.security import (
     verify_signature,
     verify_token_matches,
 )
+from app.modules.conversations.repository import ConversationRepository
+from app.modules.conversations.service import ConversationService
 from app.modules.messaging.repository import MessagingRepository
 from app.modules.messaging.service import MessagingService
+from app.modules.tontines.repository import TontineRepository
+from app.modules.tontines.service import TontineService
+from app.modules.users.repository import UserRepository
+from app.modules.users.service import UserService
 
 logger = get_logger(__name__)
 
@@ -40,12 +46,23 @@ def get_settings_from_state(request: Request) -> Settings:
 
 
 def get_messaging_service(request: Request) -> MessagingService:
-    """Assemble le service à partir des ressources partagées de l'application."""
+    """Assemble la chaîne complète à partir des ressources de l'application.
+
+    Le webhook ne connaît que ``MessagingService`` ; c'est ce dernier qui
+    délègue la composition de la réponse à la couche conversationnelle.
+    """
     settings: Settings = request.app.state.settings
     database = request.app.state.mongo_client[settings.mongodb_database]
+
+    conversation = ConversationService(
+        UserService(UserRepository(database)),
+        TontineService(TontineRepository(database)),
+        ConversationRepository(database),
+    )
     return MessagingService(
         MessagingRepository(database),
         request.app.state.whatsapp_client,
+        conversation,
         business_phone=settings.whatsapp_phone_number_id,
     )
 

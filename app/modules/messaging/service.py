@@ -1,8 +1,11 @@
 """Traitement métier des événements WhatsApp.
 
-Phase 1 : aucun routage d'intention, aucune logique tontine. Tout message
-texte entrant et nouveau reçoit la même réponse d'accueil.
+Ce service reste générique : il assure idempotence, persistance et envoi.
+Le *contenu* de la réponse est produit par un composeur externe, de sorte que
+le canal WhatsApp ignore tout des tontines.
 """
+
+from typing import Protocol
 
 from app.core.logging import get_logger, mask_phone
 from app.infrastructure.whatsapp.client import WhatsAppClient
@@ -22,10 +25,17 @@ from app.modules.messaging.schemas import (
 
 logger = get_logger(__name__)
 
-WELCOME_MESSAGE = (
-    "Bienvenue sur KEFRICO Tontine 👋\n\n"
-    "Je suis votre assistant pour gérer vos tontines directement depuis WhatsApp."
-)
+
+class ReplyComposer(Protocol):
+    """Produit le texte de réponse à un message entrant.
+
+    Un protocole plutôt qu'un import direct : la messagerie ne dépend ainsi
+    d'aucun module métier, et la direction des dépendances reste saine.
+    """
+
+    async def reply_to(
+        self, message: InboundWhatsAppMessage, *, correlation_id: str | None
+    ) -> str: ...
 
 
 class MessagingService:
@@ -35,11 +45,13 @@ class MessagingService:
         self,
         repository: MessagingRepository,
         whatsapp_client: WhatsAppClient,
+        reply_composer: ReplyComposer,
         *,
         business_phone: str | None = None,
     ) -> None:
         self._repository = repository
         self._whatsapp = whatsapp_client
+        self._compose = reply_composer
         self._business_phone = business_phone
 
     async def handle_events(
@@ -116,10 +128,10 @@ class MessagingService:
             correlation_id=correlation_id,
         )
 
+        reply = await self._compose.reply_to(message, correlation_id=correlation_id)
+
         try:
-            sent = await self._whatsapp.send_text_message(
-                to=message.sender_phone, text=WELCOME_MESSAGE
-            )
+            sent = await self._whatsapp.send_text_message(to=message.sender_phone, text=reply)
         except (WhatsAppError, WhatsAppNotConfigured) as exc:
             # Le message entrant est enregistré ; seul l'envoi a échoué.
             # L'événement reste en REPLY_FAILED : une reprise ultérieure pourra
@@ -140,7 +152,7 @@ class MessagingService:
 
         await self._repository.store_outbound_message(
             sent,
-            text=WELCOME_MESSAGE,
+            text=reply,
             sender=self._business_phone,
             correlation_id=correlation_id,
         )

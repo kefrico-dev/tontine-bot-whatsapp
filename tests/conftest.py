@@ -22,6 +22,7 @@ from tests.factories import (
     VERIFY_TOKEN,
     FakeMessagingRepository,
     FakeWhatsAppClient,
+    StaticReplyComposer,
 )
 
 
@@ -83,17 +84,28 @@ def whatsapp_client() -> FakeWhatsAppClient:
 
 
 @pytest.fixture
+def reply_composer() -> StaticReplyComposer:
+    return StaticReplyComposer()
+
+
+@pytest.fixture
 def whatsapp_app(
     whatsapp_settings: Settings,
     repository: FakeMessagingRepository,
     whatsapp_client: FakeWhatsAppClient,
+    reply_composer: StaticReplyComposer,
 ) -> FastAPI:
     """Application configurée pour WhatsApp, branchée sur des doublures."""
     application = create_app(whatsapp_settings)
     application.state.mongo_client = FakeMongoClient(reachable=True)
     application.state.indexes_ready = True
 
-    service = MessagingService(repository, whatsapp_client, business_phone=PHONE_NUMBER_ID)  # type: ignore[arg-type]
+    service = MessagingService(
+        repository,
+        whatsapp_client,  # type: ignore[arg-type]
+        reply_composer,
+        business_phone=PHONE_NUMBER_ID,
+    )
     application.dependency_overrides[get_messaging_service] = lambda: service
     return application
 
