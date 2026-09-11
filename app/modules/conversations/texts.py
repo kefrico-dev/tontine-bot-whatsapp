@@ -11,6 +11,11 @@ FREQUENCY_PER = {
     Frequency.MONTHLY: "mois",
 }
 
+#: Rappel ajouté à chaque question d'un workflow. Sans lui, rien n'indique à
+#: l'utilisateur que ces commandes existent : la sortie est possible, mais
+#: indevinable — ce qui revient presque au même.
+WORKFLOW_HINT = "\n\n_Écrivez *menu* ou *annuler* pour sortir._"
+
 
 def format_amount(amount: int, currency: str = "FCFA") -> str:
     """10000 -> « 10 000 FCFA »."""
@@ -68,38 +73,47 @@ def conflict_retry() -> str:
 
 
 def ask_name() -> str:
-    return "Créons votre tontine.\n\nQuel nom souhaitez-vous lui donner ?"
+    return "Créons votre tontine.\n\nQuel nom souhaitez-vous lui donner ?" + WORKFLOW_HINT
 
 
 def ask_amount(name: str) -> str:
-    return f"« {name} », très bien.\n\nQuel montant chaque membre cotisera-t-il ? (en FCFA)"
+    return (
+        f"« {name} », très bien.\n\nQuel montant chaque membre cotisera-t-il ? (en FCFA)"
+        + WORKFLOW_HINT
+    )
 
 
 def ask_frequency() -> str:
-    return "À quelle fréquence ?\n\n1. Hebdomadaire\n2. Mensuelle\n\nRépondez par 1 ou 2."
+    return (
+        "À quelle fréquence ?\n\n1. Hebdomadaire\n2. Mensuelle\n\nRépondez par 1 ou 2."
+        + WORKFLOW_HINT
+    )
 
 
 def ask_members() -> str:
-    return "Combien de membres prévoyez-vous ?"
+    return "Combien de membres prévoyez-vous ?" + WORKFLOW_HINT
 
 
 def invalid_name() -> str:
-    return "Ce nom ne convient pas. Il doit contenir entre 2 et 60 caractères.\n\nQuel nom ?"
+    return (
+        "Ce nom ne convient pas. Il doit contenir entre 2 et 60 caractères.\n\nQuel nom ?"
+        + WORKFLOW_HINT
+    )
 
 
 def invalid_amount() -> str:
     return (
         "Ce montant ne convient pas. Indiquez un nombre entier de francs, "
-        "par exemple *10000*.\n\nQuel montant ?"
+        "par exemple *10000*.\n\nQuel montant ?" + WORKFLOW_HINT
     )
 
 
 def invalid_frequency() -> str:
-    return "Répondez par *1* pour hebdomadaire ou *2* pour mensuelle."
+    return "Répondez par *1* pour hebdomadaire ou *2* pour mensuelle." + WORKFLOW_HINT
 
 
 def invalid_members() -> str:
-    return "Indiquez un nombre de membres entre 2 et 100.\n\nCombien de membres ?"
+    return "Indiquez un nombre de membres entre 2 et 100.\n\nCombien de membres ?" + WORKFLOW_HINT
 
 
 def creation_summary(*, name: str, amount: int, frequency: Frequency, expected_members: int) -> str:
@@ -129,15 +143,18 @@ def tontine_created(tontine: Tontine) -> str:
 
 
 def ask_invite_code() -> str:
-    return "Entrez le code d'invitation.\n\nExemple : *KFT-A7P3Q9*"
+    return "Entrez le code d'invitation.\n\nExemple : *KFT-A7P3Q9*" + WORKFLOW_HINT
 
 
 def invalid_invite_code() -> str:
-    return "Ce code n'a pas le bon format. Il ressemble à *KFT-A7P3Q9*.\n\nEntrez le code."
+    return (
+        "Ce code n'a pas le bon format. Il ressemble à *KFT-A7P3Q9*.\n\nEntrez le code."
+        + WORKFLOW_HINT
+    )
 
 
 def unknown_invite_code() -> str:
-    return "Aucune tontine ne correspond à ce code.\n\nVérifiez-le et réessayez, ou écrivez *menu*."
+    return "Aucune tontine ne correspond à ce code.\n\nVérifiez-le et réessayez." + WORKFLOW_HINT
 
 
 def join_preview(tontine: Tontine) -> str:
